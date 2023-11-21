@@ -1,8 +1,9 @@
 package semver
 
 type conf struct {
-	zeroPadding       bool
-	includePreRelease bool
+	zeroPadding          bool
+	includePreRelease    bool
+	preReleaseAsRevision bool
 }
 
 type ConstraintOption interface {
@@ -19,4 +20,10 @@ type WithPreRelease bool
 
 func (o WithPreRelease) apply(c *conf) {
 	c.includePreRelease = bool(o)
+}
+
+type WithRevision bool
+
+func (o WithRevision) apply(c *conf) {
+	c.preReleaseAsRevision = bool(o)
 }

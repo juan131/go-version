@@ -131,7 +131,11 @@ func (v Version) IncMinor() Version {
 
 // IncPatch produces the next patch version.
 func (v Version) IncPatch() Version {
-	v.patch = v.patch.(part.Uint64) + 1
+	if v.patch.IsNull() || v.patch.IsEmpty() {
+		v.patch = part.Uint64(1)
+	} else {
+		v.patch = v.patch.(part.Uint64) + 1
+	}
 	v.preRelease = part.Parts{}
 	v.buildMetadata = ""
 	v.original = v.String()

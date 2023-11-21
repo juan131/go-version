@@ -595,6 +595,372 @@ func TestConstraint_CheckWithPreReleaseAndZeroPadding(t *testing.T) {
 	}
 }
 
+func TestConstraint_CheckWithRevisions(t *testing.T) {
+	tests := []struct {
+		constraint string
+		version    string
+		want       bool
+	}{
+		// Equal
+		{"=2.0.0", "1.2.3", false},
+		{"=2.0.0", "2.0.0", true},
+		{"=2.0", "1.2.3", false},
+		{"=2.0", "2.0.0", true},
+		{"=2.0", "2.0.1", true},
+		{"=2", "1.2.3", false},
+		{"=2", "2.0.0", true},
+		{"=2", "2.0.1", true},
+
+		// Not equal
+		{"!=4.1.0", "4.1.0", false},
+		{"!=4.1.0", "4.1.1", true},
+		{"!=4.1", "4.1.0", false},
+		{"!=4.1", "4.1.1", false},
+		{"!=4", "4.0.0", false},
+		{"!=4", "4.0.1", false},
+
+		// Less than
+		{"<1.1.1", "1.1.0", true},
+		{"<1.1.1", "1.1.1", false},
+		{"<1.1", "1.0.0", true},
+		{"<1.1", "1.1.0", false},
+		{"<1.1", "1.1.1", false},
+		{"<1", "0.1.0", true},
+		{"<1", "1.0.0", false},
+		{"<1", "1.1.0", false},
+
+		// Less than or equal
+		{"<=1.1.1", "1.1.0", true},
+		{"<=1.1.1", "1.1.1", true},
+		{"<=1.1", "1.0.0", true},
+		{"<=1.1", "1.1.0", true},
+		{"<=1.1", "1.1.1", true},
+		{"<=1", "0.1.0", true},
+		{"<=1", "1.0.0", true},
+		{"<=1", "1.1.0", true},
+
+		// Greater than
+		{">1.1.1", "1.1.2", true},
+		{">1.1.1", "1.1.1", false},
+		{">1.1", "1.1.1", false},
+		{">1.1", "1.1.0", false},
+		{">1.1", "1.0.0", false},
+		{">1", "0.1.0", false},
+		{">1", "1.0.0", false},
+		{">1", "1.1.0", false},
+
+		// Greater than or equal
+		{">=1.1.1", "1.1.2", true},
+		{">=1.1.1", "1.1.1", true},
+		{">=1.1", "1.1.1", true},
+		{">=1.1", "1.1.0", true},
+		{">=1.1", "1.0.0", false},
+		{">=1", "0.1.0", false},
+		{">=1", "1.0.0", true},
+		{">=1", "1.1.0", true},
+
+		// Asterisk
+		{"*", "1.0.0", true},
+		{"*", "4.5.6", true},
+		{"2.*", "1.0.0", false},
+		{"2.*", "2.1.1", true},
+		{"2.1.*", "2.1.1", true},
+		{"2.1.*", "2.2.1", false},
+
+		// Empty
+		{"", "1.0.0", true},
+		{"", "4.5.6", true},
+		{"2", "1.0.0", false},
+		{"2", "3.4.5", false},
+		{"2", "2.0.0", true},
+		{"2.1", "2.1.0", true},
+		{"2.1", "2.1.1", true},
+
+		// Tilde
+		{"~1.2.3", "1.2.4", true},
+		{"~1.2.3", "1.3.4", false},
+		{"~1.2", "1.2.4", true},
+		{"~1.2", "1.3.4", false},
+		{"~1", "1.2.4", true},
+		{"~1", "2.3.4", false},
+		{"~0.2.3", "0.2.5", true},
+		{"~0.2.3", "0.3.5", false},
+		{"~1.2.3-beta.2", "1.2.3-beta.4", true},
+		{"^1.2.3", "1.8.9", true},
+		{"^1.2.3", "2.8.9", false},
+		{"^1.2.3", "1.2.1", false},
+		{"^1.1.0", "2.1.0", false},
+		{"^1.2.0", "2.2.1", false},
+		{"^1.2", "1.8.9", true},
+		{"^1.2", "2.8.9", false},
+		{"^1", "1.8.9", true},
+		{"^1", "2.8.9", false},
+		{"^0.2.3", "0.2.5", true},
+		{"^0.2.3", "0.5.6", false},
+		{"^0.2", "0.2.5", true},
+		{"^0.2", "0.5.6", false},
+		{"^0.0.3", "0.0.3", true},
+		{"^0.0.3", "0.0.4", false},
+		{"^0.0", "0.0.3", true},
+		{"^0.0", "0.1.4", false},
+		{"^0.0", "1.0.4", false},
+		{"^0", "0.2.3", true},
+		{"^0", "1.1.4", false},
+
+		// pre-release: Not equal
+		{"!=4.1", "5.1.0-alpha.1", true},
+		{"!=4.1-alpha", "4.1.0", true},
+
+		// pre-release: Greater than
+		{">0", "0.0.1-alpha", false},
+		{">0.0", "0.0.1-alpha", false},
+		{">0-0", "0.0.1-alpha", false},
+		{">0.0-0", "0.0.1-alpha", false},
+		{">0", "0.0.0-alpha", false},
+		{">0-0", "0.0.0-alpha", false},
+		{">0.0.0-0", "0.0.0-alpha", true},
+		{">1.2.3-alpha.1", "1.2.3-alpha.2", true},
+		{">1.2.3-alpha.1", "1.3.3-alpha.2", true},
+
+		// pre-release: Less than
+		{"<1", "1.0.0-alpha", false},
+		{"<1-z", "1.0.0-alpha", false},
+		{"<1.1", "1.1.0-alpha", false},
+		{"<1.1-z", "1.1.0-alpha", false},
+		{"<1.1.1", "1.1.1-alpha", false},
+		{"<1.1.1-z", "1.1.1-alpha", true},
+
+		// pre-release: Greater than or equal
+		{">=0", "0.0.1-alpha", true},
+		{">=0.0", "0.0.1-alpha", true},
+		{">=0-0", "0.0.1-alpha", false},
+		{">=0.0-0", "0.0.1-alpha", false},
+		{">=0", "0.0.0-alpha", true},
+		{">=0-0", "0.0.0-alpha", false},
+		{">=0.0.0", "0.0.0-alpha", true},
+		{">=0.0.0-0", "0.0.0-alpha", true},
+		{">=0.0.0-0", "1.2.3", true},
+		{">=0.0.0-0", "3.4.5-beta.1", true},
+
+		// pre-release: Asterisk
+		{"*", "1.2.3-alpha.1", true},
+
+		// pre-release: Empty
+		{"", "1.2.3-alpha.1", true},
+
+		// pre-release: Tilde
+		{"~1.2.3-beta.2", "1.2.3-beta.4", true},
+		{"~1.2.3-beta.2", "1.2.4-beta.2", true},
+		{"~1.2.3-beta.2", "1.3.4-beta.2", false},
+
+		// pre-release: Caret
+		{"^1.2.0", "1.2.1-alpha.1", true},
+		{"^1.2.0-alpha.0", "1.2.1-alpha.1", true},
+		{"^1.2.0-alpha.0", "1.2.1-alpha.0", true},
+		{"^1.2.0-alpha.2", "1.2.0-alpha.1", false},
+		{"^0.2.3-beta.2", "0.2.3-beta.4", true},
+		{"^0.2.3-beta.2", "0.2.4-beta.2", true},
+		{"^0.2.3-beta.2", "0.3.4-beta.2", false},
+		{"^0.2.3-beta.2", "0.2.3-beta.2", true},
+	}
+
+	for _, tc := range tests {
+		t.Run(fmt.Sprintf("%s vs %s", tc.constraint, tc.version), func(t *testing.T) {
+			c, err := NewConstraints(tc.constraint, WithRevision(true), WithPreRelease(true))
+			require.NoError(t, err)
+
+			v, err := Parse(tc.version)
+			require.NoError(t, err)
+
+			got := c.Check(v)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestConstraint_CheckWithRevisionsAndZeroPadding(t *testing.T) {
+	tests := []struct {
+		constraint string
+		version    string
+		want       bool
+	}{
+		// Equal
+		{"=2.0.0", "1.2.3", false},
+		{"=2.0.0", "2.0.0", true},
+		{"=2.0", "1.2.3", false},
+		{"=2.0", "2.0.0", true},
+		{"=2.0", "2.0.1", false},
+		{"=2", "1.2.3", false},
+		{"=2", "2.0.0", true},
+		{"=2", "2.0.1", false},
+
+		// Not equal
+		{"!=4.1.0", "4.1.0", false},
+		{"!=4.1.0", "4.1.1", true},
+		{"!=4.1", "4.1.0", false},
+		{"!=4.1", "4.1.1", true},
+		{"!=4", "4.0.0", false},
+		{"!=4", "4.0.1", true},
+
+		// Less than
+		{"<1.1.1", "1.1.0", true},
+		{"<1.1.1", "1.1.1", false},
+		{"<1.1", "1.0.0", true},
+		{"<1.1", "1.1.0", false},
+		{"<1.1", "1.1.1", false},
+		{"<1", "0.1.0", true},
+		{"<1", "1.0.0", false},
+		{"<1", "1.1.0", false},
+
+		// Less than or equal
+		{"<=1.1.1", "1.1.0", true},
+		{"<=1.1.1", "1.1.1", true},
+		{"<=1.1", "1.0.0", true},
+		{"<=1.1", "1.1.0", true},
+		{"<=1.1", "1.1.1", false},
+		{"<=1", "0.1.0", true},
+		{"<=1", "1.0.0", true},
+		{"<=1", "1.1.0", false},
+
+		// Greater than
+		{">1.1.1", "1.1.2", true},
+		{">1.1.1", "1.1.1", false},
+		{">1.1", "1.1.1", true},
+		{">1.1", "1.1.0", false},
+		{">1.1", "1.0.0", false},
+		{">1", "0.1.0", false},
+		{">1", "1.0.0", false},
+		{">1", "1.1.0", true},
+
+		// Greater than or equal
+		{">=1.1.1", "1.1.2", true},
+		{">=1.1.1", "1.1.1", true},
+		{">=1.1", "1.1.1", true},
+		{">=1.1", "1.1.0", true},
+		{">=1.1", "1.0.0", false},
+		{">=1", "0.1.0", false},
+		{">=1", "1.0.0", true},
+		{">=1", "1.1.0", true},
+
+		// Asterisk
+		{"*", "1.0.0", true},
+		{"*", "4.5.6", true},
+		{"2.*", "1.0.0", false},
+		{"2.*", "2.1.1", true},
+		{"2.1.*", "2.1.1", true},
+		{"2.1.*", "2.2.1", false},
+
+		// Empty
+		{"", "1.0.0", true},
+		{"", "4.5.6", true},
+		{"2", "1.0.0", false},
+		{"2", "3.4.5", false},
+		{"2", "2.0.0", true},
+		{"2.1", "2.1.0", true},
+		{"2.1", "2.1.1", false},
+
+		// Tilde
+		{"~1.2.3", "1.2.4", true},
+		{"~1.2.3", "1.3.4", false},
+		{"~1.2", "1.2.4", true},
+		{"~1.2", "1.3.4", false},
+		{"~1", "1.2.4", true},
+		{"~1", "2.3.4", false},
+		{"~0.2.3", "0.2.5", true},
+		{"~0.2.3", "0.3.5", false},
+		{"~1.2.3-beta.2", "1.2.3-beta.4", true},
+		{"^1.2.3", "1.8.9", true},
+		{"^1.2.3", "2.8.9", false},
+		{"^1.2.3", "1.2.1", false},
+		{"^1.1.0", "2.1.0", false},
+		{"^1.2.0", "2.2.1", false},
+		{"^1.2", "1.8.9", true},
+		{"^1.2", "2.8.9", false},
+		{"^1", "1.8.9", true},
+		{"^1", "2.8.9", false},
+		{"^0.2.3", "0.2.5", true},
+		{"^0.2.3", "0.5.6", false},
+		{"^0.2", "0.2.5", true},
+		{"^0.2", "0.5.6", false},
+		{"^0.0.3", "0.0.3", true},
+		{"^0.0.3", "0.0.4", false},
+		{"^0.0", "0.0.3", true},
+		{"^0.0", "0.1.4", false},
+		{"^0.0", "1.0.4", false},
+		{"^0", "0.2.3", true},
+		{"^0", "1.1.4", false},
+
+		// pre-release: Not equal
+		{"!=4.1", "5.1.0-alpha.1", true},
+		{"!=4.1-alpha", "4.1.0", true},
+
+		// pre-release: Greater than
+		{">0", "0.0.1-alpha", true},
+		{">0.0", "0.0.1-alpha", true},
+		{">0-0", "0.0.1-alpha", true},
+		{">0.0-0", "0.0.1-alpha", true},
+		{">0", "0.0.0-alpha", true},
+		{">0-0", "0.0.0-alpha", true},
+		{">0.0.0-0", "0.0.0-alpha", true},
+		{">1.2.3-alpha.1", "1.2.3-alpha.2", true},
+		{">1.2.3-alpha.1", "1.3.3-alpha.2", true},
+
+		// pre-release: Less than
+		{"<1", "1.0.0-alpha", false},
+		{"<1-z", "1.0.0-alpha", true},
+		{"<1.1", "1.1.0-alpha", false},
+		{"<1.1-z", "1.1.0-alpha", true},
+		{"<1.1.1", "1.1.1-alpha", false},
+		{"<1.1.1-z", "1.1.1-alpha", true},
+
+		// pre-release: Greater than or equal
+		{">=0", "0.0.1-alpha", true},
+		{">=0.0", "0.0.1-alpha", true},
+		{">=0-0", "0.0.1-alpha", true},
+		{">=0.0-0", "0.0.1-alpha", true},
+		{">=0", "0.0.0-alpha", true},
+		{">=0-0", "0.0.0-alpha", true},
+		{">=0.0.0", "0.0.0-alpha", true},
+		{">=0.0.0-0", "0.0.0-alpha", true},
+		{">=0.0.0-0", "1.2.3", true},
+		{">=0.0.0-0", "3.4.5-beta.1", true},
+
+		// pre-release: Asterisk
+		{"*", "1.2.3-alpha.1", true},
+
+		// pre-release: Empty
+		{"", "1.2.3-alpha.1", true},
+
+		// pre-release: Tilde
+		{"~1.2.3-beta.2", "1.2.3-beta.4", true},
+		{"~1.2.3-beta.2", "1.2.4-beta.2", true},
+		{"~1.2.3-beta.2", "1.3.4-beta.2", false},
+
+		// pre-release: Caret
+		{"^1.2.0", "1.2.1-alpha.1", true},
+		{"^1.2.0-alpha.0", "1.2.1-alpha.1", true},
+		{"^1.2.0-alpha.0", "1.2.1-alpha.0", true},
+		{"^1.2.0-alpha.2", "1.2.0-alpha.1", false},
+		{"^0.2.3-beta.2", "0.2.3-beta.4", true},
+		{"^0.2.3-beta.2", "0.2.4-beta.2", true},
+		{"^0.2.3-beta.2", "0.3.4-beta.2", false},
+		{"^0.2.3-beta.2", "0.2.3-beta.2", true},
+	}
+
+	for _, tc := range tests {
+		t.Run(fmt.Sprintf("%s vs %s", tc.constraint, tc.version), func(t *testing.T) {
+			c, err := NewConstraints(tc.constraint, WithRevision(true), WithPreRelease(true), WithZeroPadding(true))
+			require.NoError(t, err)
+
+			v, err := Parse(tc.version)
+			require.NoError(t, err)
+
+			got := c.Check(v)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
 func TestConstraints_Check(t *testing.T) {
 	tests := []struct {
 		constraint string

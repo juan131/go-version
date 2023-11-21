@@ -249,6 +249,15 @@ func constraintCaret(v, c Version) bool {
 
 func preCheck(f operatorFunc, conf conf) operatorFunc {
 	return func(v, c Version) bool {
+		if conf.preReleaseAsRevision {
+			// Bump the patch version before comparing if pre-release is not null
+			// and the other version's pre-release is null.
+			if !v.preRelease.IsNull() && c.preRelease.IsNull() && c.String() != v.IncPatch().String() {
+				v = v.IncPatch()
+			} else if !c.preRelease.IsNull() && v.preRelease.IsNull() && v.String() != c.IncPatch().String() {
+				c = c.IncPatch()
+			}
+		}
 		if !conf.includePreRelease && (!v.preRelease.IsNull() && c.preRelease.IsNull()) {
 			return false
 		} else if !c.preRelease.IsNull() && c.IsAny() {
